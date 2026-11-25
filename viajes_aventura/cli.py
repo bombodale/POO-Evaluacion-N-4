@@ -3,12 +3,33 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from getpass import getpass
 
+import mysql.connector
+
 from .models import Destination, TravelPackage, User, UserRole
+from .mysql_repository import MySQLRepository
 from .services import TravelService
 
 
 def main() -> None:
-    service = TravelService()
+    try:
+        repository = MySQLRepository.from_env()
+    except ValueError as error:
+        print(f"Configuracion de base de datos invalida: {error}")
+        return
+    except mysql.connector.Error as error:
+        print(
+            "No se pudo conectar a MySQL, verifique su conexion"
+        )
+        print(f"Detalle: {error}")
+        return
+
+    try:
+        _run_application(TravelService(repository))
+    finally:
+        repository.close()
+
+
+def _run_application(service: TravelService) -> None:
     print("=== Viajes Aventura ===")
     if not service.repository.has_user_with_role(UserRole.ADMIN):
         print("Configuracion inicial: crea la cuenta del administrador.")
@@ -36,19 +57,21 @@ def main() -> None:
 
 def _create_account(service: TravelService, admin: bool) -> None:
     name = input("Nombre: ")
-    email = input("Correo: ")
+    username = input("Nombre de usuario (3-30 caracteres): ")
     password = getpass("Contrasena (minimo 10 caracteres): ")
     if admin:
-        service.create_initial_admin(name, email, password)
+        service.create_initial_admin(name, username, password)
         print("Administrador creado. Esta cuenta se conserva durante esta ejecucion.")
     else:
-        service.register_client(name, email, password)
+        service.register_client(name, username, password)
         print("Cuenta de cliente creada.")
 
 
 def _login(service: TravelService) -> User | None:
     try:
-        return service.authenticate(input("Correo: "), getpass("Contrasena: "))
+        return service.authenticate(
+            input("Nombre de usuario: "), getpass("Contrasena: ")
+        )
     except ValueError as error:
         print(f"Error: {error}")
         return None

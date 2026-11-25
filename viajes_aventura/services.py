@@ -1,4 +1,3 @@
-import re
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -12,37 +11,35 @@ class TravelService:
     def __init__(self, repository: Repository | None = None) -> None:
         self.repository = repository if repository is not None else InMemoryRepository()
 
-    def register_client(self, name: str, email: str, password: str) -> User:
-        return self._register_user(name, email, password, UserRole.CLIENT)
+    def register_client(self, name: str, username: str, password: str) -> User:
+        return self._register_user(name, username, password, UserRole.CLIENT)
 
-    def create_initial_admin(self, name: str, email: str, password: str) -> User:
+    def create_initial_admin(self, name: str, username: str, password: str) -> User:
         if self.repository.has_user_with_role(UserRole.ADMIN):
             raise ValueError("Ya existe un administrador.")
-        return self._register_user(name, email, password, UserRole.ADMIN)
+        return self._register_user(name, username, password, UserRole.ADMIN)
 
-    def _register_user(self, name: str, email: str, password: str, role: UserRole) -> User:
+    def _register_user(self, name: str, username: str, password: str, role: UserRole) -> User:
         clean_name = self._required_text(name, "nombre")
-        clean_email = email.strip().lower()
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", clean_email):
-            raise ValueError("El correo electronico no tiene un formato valido.")
+        clean_username = self._username(username)
         if len(password) < 10:
             raise ValueError("La contrasena debe tener al menos 10 caracteres.")
-        if self.repository.get_user_by_email(clean_email):
-            raise ValueError("Ya existe una cuenta con ese correo.")
+        if self.repository.get_user_by_username(clean_username):
+            raise ValueError("Ya existe una cuenta con ese nombre de usuario.")
         user = User(
             id=str(uuid.uuid4()),
             name=clean_name,
-            email=clean_email,
+            username=clean_username,
             password_hash=hash_password(password),
             role=role,
         )
         self.repository.add_user(user)
         return user
 
-    def authenticate(self, email: str, password: str) -> User:
-        user = self.repository.get_user_by_email(email.strip().lower())
+    def authenticate(self, username: str, password: str) -> User:
+        user = self.repository.get_user_by_username(username.strip().casefold())
         if user is None or not verify_password(password, user.password_hash):
-            raise ValueError("Correo o contrasena incorrectos.")
+            raise ValueError("Nombre de usuario o contrasena incorrectos.")
         return user
 
     def create_destination(
@@ -171,6 +168,21 @@ class TravelService:
         if not clean_value:
             raise ValueError(f"El campo {field} es obligatorio.")
         return clean_value
+
+    @staticmethod
+    def _username(value: str) -> str:
+        username = value.strip().casefold()
+        if not 3 <= len(username) <= 30:
+            raise ValueError("El nombre de usuario debe tener entre 3 y 30 caracteres.")
+        valid_characters = all(
+            character.isascii() and (character.isalnum() or character in "_.-")
+            for character in username
+        )
+        if not valid_characters:
+            raise ValueError(
+                "El nombre de usuario solo puede contener letras sin acentos, numeros, punto, guion y guion bajo."
+            )
+        return username
 
     @staticmethod
     def _money(value: str | Decimal) -> Decimal:

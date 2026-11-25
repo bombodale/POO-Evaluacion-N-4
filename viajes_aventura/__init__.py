@@ -2,6 +2,11 @@
 
 from .repositories import InMemoryRepository, Repository
 from .services import TravelService
-from .sqlite_repository import SQLiteRepository
+from .mysql_repository import MySQLRepository
 
-__all__ = ["InMemoryRepository", "Repository", "SQLiteRepository", "TravelService"]
+__all__ = [
+    "InMemoryRepository",
+    "MySQLRepository",
+    "Repository",
+    "TravelService",
+]

@@ -22,7 +22,7 @@ class Repository(Protocol):
 
     def add_user(self, user: User) -> None: ...
 
-    def get_user_by_email(self, email: str) -> User | None: ...
+    def get_user_by_username(self, username: str) -> User | None: ...
 
     def has_user_with_role(self, role: UserRole) -> bool: ...
 
@@ -38,7 +38,7 @@ class InMemoryRepository:
         self._destinations: dict[str, Destination] = {}
         self._packages: dict[str, TravelPackage] = {}
         self._users_by_id: dict[str, User] = {}
-        self._user_ids_by_email: dict[str, str] = {}
+        self._user_ids_by_username: dict[str, str] = {}
         self._reservations: dict[str, Reservation] = {}
 
     def add_destination(self, destination: Destination) -> None:
@@ -77,13 +77,14 @@ class InMemoryRepository:
         return list(self._packages.values())
 
     def add_user(self, user: User) -> None:
-        if user.id in self._users_by_id or user.email in self._user_ids_by_email:
-            raise ValueError("Ya existe un usuario con ese identificador o correo.")
+        username_key = user.username.casefold()
+        if user.id in self._users_by_id or username_key in self._user_ids_by_username:
+            raise ValueError("Ya existe un usuario con ese identificador o nombre de usuario.")
         self._users_by_id[user.id] = user
-        self._user_ids_by_email[user.email] = user.id
+        self._user_ids_by_username[username_key] = user.id
 
-    def get_user_by_email(self, email: str) -> User | None:
-        user_id = self._user_ids_by_email.get(email)
+    def get_user_by_username(self, username: str) -> User | None:
+        user_id = self._user_ids_by_username.get(username.casefold())
         return self._users_by_id.get(user_id) if user_id else None
 
     def has_user_with_role(self, role: UserRole) -> bool:

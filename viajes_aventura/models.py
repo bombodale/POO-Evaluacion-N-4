@@ -10,11 +10,11 @@ class UserRole(str, Enum):
 
 class User:
     def __init__(
-        self, id: str, name: str, email: str, password_hash: str, role: UserRole
+        self, id: str, name: str, username: str, password_hash: str, role: UserRole
     ) -> None:
         self.id = id
         self.name = name
-        self.email = email
+        self.username = username
         self.password_hash = password_hash
         self.role = role
 

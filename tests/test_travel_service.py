@@ -1,13 +1,10 @@
-import tempfile
 import unittest
 from datetime import date, timedelta
 from decimal import Decimal
-from pathlib import Path
 
 from viajes_aventura.models import UserRole
 from viajes_aventura.repositories import InMemoryRepository
 from viajes_aventura.services import TravelService
-from viajes_aventura.sqlite_repository import SQLiteRepository
 
 
 class TravelServiceTests(unittest.TestCase):
@@ -15,18 +12,26 @@ class TravelServiceTests(unittest.TestCase):
         self.repository = InMemoryRepository()
         self.service = TravelService(self.repository)
         self.admin = self.service.create_initial_admin(
-            "Admin Viajes", "admin@example.com", "admin-password-123"
+            "Admin Viajes", "adminviajes", "admin-password-123"
         )
 
-    def test_password_is_hashed_and_login_is_case_insensitive(self) -> None:
+    def test_password_is_hashed_and_username_login_is_case_insensitive(self) -> None:
         self.assertNotEqual(self.admin.password_hash, "admin-password-123")
-        authenticated = self.service.authenticate("ADMIN@example.com", "admin-password-123")
+        authenticated = self.service.authenticate("ADMINVIAJES", "admin-password-123")
         self.assertEqual(authenticated.id, self.admin.id)
         with self.assertRaisesRegex(ValueError, "incorrectos"):
-            self.service.authenticate("admin@example.com", "wrong-password")
+            self.service.authenticate("adminviajes", "wrong-password")
+
+    def test_username_must_be_valid_and_unique_case_insensitively(self) -> None:
+        with self.assertRaisesRegex(ValueError, "3 y 30"):
+            self.service.register_client("Cliente", "ab", "client-pass-123")
+        with self.assertRaisesRegex(ValueError, "solo puede contener"):
+            self.service.register_client("Cliente", "cliente uno", "client-pass-123")
+        with self.assertRaisesRegex(ValueError, "Ya existe"):
+            self.service.register_client("Otro Admin", "ADMINVIAJES", "client-pass-123")
 
     def test_only_admin_can_manage_destinations(self) -> None:
-        client = self.service.register_client("Cliente", "client@example.com", "client-pass-123")
+        client = self.service.register_client("Cliente", "clientuser", "client-pass-123")
         with self.assertRaisesRegex(ValueError, "administrador"):
             self.service.create_destination(client, "Lima", "Peru", "Lima", "Centro", "10")
 
@@ -45,7 +50,7 @@ class TravelServiceTests(unittest.TestCase):
             [first.id, second.id],
         )
         self.assertEqual(package.cost, Decimal("325.50"))
-        client = self.service.register_client("Cliente", "client@example.com", "client-pass-123")
+        client = self.service.register_client("Cliente", "clientuser", "client-pass-123")
         self.service.reserve_package(client, package.id)
         history = self.service.reservation_history(client)
         self.assertEqual(len(history), 1)
@@ -85,43 +90,9 @@ class TravelServiceTests(unittest.TestCase):
             date.today() - timedelta(days=1),
             [destination.id],
         )
-        client = self.service.register_client("Cliente", "client@example.com", "client-pass-123")
+        client = self.service.register_client("Cliente", "clientuser", "client-pass-123")
         with self.assertRaisesRegex(ValueError, "ya no esta disponible"):
             self.service.reserve_package(client, package.id)
-
-
-class SQLiteRepositoryTests(unittest.TestCase):
-    def test_persists_and_reloads_entities_with_foreign_keys(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            database_path = Path(directory) / "travel.db"
-            repository = SQLiteRepository(database_path)
-            service = TravelService(repository)
-            admin = service.create_initial_admin(
-                "Admin Viajes", "admin@example.com", "admin-password-123"
-            )
-            destination = service.create_destination(
-                admin, "Lima", "Peru", "Lima", "Capital", "123.45"
-            )
-            package = service.create_package(
-                admin,
-                "Escapada",
-                date.today(),
-                date.today() + timedelta(days=2),
-                [destination.id],
-            )
-            with self.assertRaisesRegex(ValueError, "asociado"):
-                service.delete_destination(admin, destination.id)
-            client = service.register_client(
-                "Cliente", "client@example.com", "client-pass-123"
-            )
-            service.reserve_package(client, package.id)
-            repository.close()
-
-            reopened = SQLiteRepository(database_path)
-            self.assertEqual(len(reopened.list_destinations()), 1)
-            self.assertEqual(reopened.get_package(package.id).cost, Decimal("123.45"))
-            self.assertEqual(len(reopened.list_reservations_for_user(client.id)), 1)
-            reopened.close()
 
 
 if __name__ == "__main__":
