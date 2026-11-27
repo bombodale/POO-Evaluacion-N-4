@@ -24,23 +24,14 @@ validan antes de guardar o reservar.
 
 ## Persistencia y SQLite
 
-La aplicacion usa actualmente `InMemoryRepository`: los datos solo existen
-durante la ejecucion y se pierden al cerrar el programa. SQLite esta preparado
-en `SQLiteRepository`, con tablas, claves foraneas, restricciones y las mismas
-operaciones que requiere el servicio. No se crea ni se usa un archivo de base de
-datos al iniciar la CLI.
+La CLI usa SQLite y guarda destinos, paquetes, usuarios y reservas entre
+ejecuciones. La base de datos se crea automaticamente en la carpeta personal
+del usuario, dentro de `.viajes_aventura/viajes_aventura.db` (por ejemplo,
+`%USERPROFILE%\.viajes_aventura\viajes_aventura.db` en Windows). Las contrasenas
+se almacenan como hashes PBKDF2-HMAC-SHA256, no como texto plano.
 
-Para activar SQLite mas adelante, cambia la construccion del servicio en
-`viajes_aventura/cli.py` por:
-
-```python
-from viajes_aventura.sqlite_repository import SQLiteRepository
-
-service = TravelService(SQLiteRepository("data/viajes_aventura.db"))
-```
-
-La capa de servicios y la interfaz no necesitan cambiar. La carpeta `data`
-debe existir antes de abrir una ruta de archivo SQLite.
+Las pruebas pueden usar `InMemoryRepository` cuando necesitan datos temporales;
+el servicio acepta ambos repositorios sin cambiar las operaciones CRUD.
 
 ## Pruebas
 

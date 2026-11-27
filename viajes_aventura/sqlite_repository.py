@@ -7,7 +7,7 @@ from .models import Destination, Reservation, TravelPackage, User, UserRole
 
 
 class SQLiteRepository:
-    """Adaptador SQLite opcional; la CLI no lo activa por defecto."""
+    """Adaptador SQLite para guardar las entidades entre ejecuciones."""
 
     def __init__(self, database_path: str | Path) -> None:
         self._connection = sqlite3.connect(str(database_path))

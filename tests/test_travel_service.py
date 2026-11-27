@@ -3,7 +3,11 @@ import unittest
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
+from viajes_aventura.crear_cli import create_destination
+from viajes_aventura.editar_cli import update_destination
+from viajes_aventura.eliminar_cli import delete_destination
 from viajes_aventura.models import UserRole
 from viajes_aventura.repositories import InMemoryRepository
 from viajes_aventura.services import TravelService
@@ -29,6 +33,38 @@ class TravelServiceTests(unittest.TestCase):
         client = self.service.register_client("Cliente", "client@example.com", "client-pass-123")
         with self.assertRaisesRegex(ValueError, "administrador"):
             self.service.create_destination(client, "Lima", "Peru", "Lima", "Centro", "10")
+
+    def test_destination_cli_create_update_and_delete(self) -> None:
+        with patch(
+            "builtins.input",
+            side_effect=["Lima", "Peru", "Lima", "Capital", "10.50"],
+        ):
+            create_destination(self.service, self.admin)
+
+        destination = self.service.list_destinations()[0]
+        self.assertEqual(destination.name, "Lima")
+        self.assertEqual(destination.base_cost, Decimal("10.50"))
+
+        with patch(
+            "builtins.input",
+            side_effect=[
+                destination.id,
+                "Cusco",
+                "Peru",
+                "Cusco",
+                "Andes",
+                "20.25",
+            ],
+        ):
+            update_destination(self.service, self.admin)
+
+        updated_destination = self.service.list_destinations()[0]
+        self.assertEqual(updated_destination.name, "Cusco")
+        self.assertEqual(updated_destination.base_cost, Decimal("20.25"))
+
+        with patch("builtins.input", side_effect=[destination.id]):
+            delete_destination(self.service, self.admin)
+        self.assertEqual(self.service.list_destinations(), [])
 
     def test_package_cost_reservation_history_and_delete_guard(self) -> None:
         first = self.service.create_destination(
@@ -121,6 +157,10 @@ class SQLiteRepositoryTests(unittest.TestCase):
             self.assertEqual(len(reopened.list_destinations()), 1)
             self.assertEqual(reopened.get_package(package.id).cost, Decimal("123.45"))
             self.assertEqual(len(reopened.list_reservations_for_user(client.id)), 1)
+            authenticated = TravelService(reopened).authenticate(
+                client.email, "client-pass-123"
+            )
+            self.assertEqual(authenticated.id, client.id)
             reopened.close()
 
 

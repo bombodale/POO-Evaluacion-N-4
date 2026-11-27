@@ -1,14 +1,29 @@
 from collections.abc import Callable
 from datetime import date
-from decimal import Decimal, InvalidOperation
 from getpass import getpass
+from pathlib import Path
 
-from .models import Destination, TravelPackage, User, UserRole
+from .crear_cli import create_destination
+from .descripcion_cli import show_destinations
+from .editar_cli import update_destination
+from .eliminar_cli import delete_destination
+from .login import login
+from .models import TravelPackage, User, UserRole
 from .services import TravelService
+from .sqlite_repository import SQLiteRepository
 
 
 def main() -> None:
-    service = TravelService()
+    database_directory = Path.home() / ".viajes_aventura"
+    database_directory.mkdir(parents=True, exist_ok=True)
+    repository = SQLiteRepository(database_directory / "viajes_aventura.db")
+    try:
+        _run_application(TravelService(repository))
+    finally:
+        repository.close()
+
+
+def _run_application(service: TravelService) -> None:
     print("=== Viajes Aventura ===")
     if not service.repository.has_user_with_role(UserRole.ADMIN):
         print("Configuracion inicial: crea la cuenta del administrador.")
@@ -27,7 +42,7 @@ def main() -> None:
             _run_action(lambda: _create_account(service, admin=False))
             continue
         if option == "1":
-            user = _login(service)
+            user = login(service)
             if user:
                 _user_menu(service, user)
             continue
@@ -40,18 +55,10 @@ def _create_account(service: TravelService, admin: bool) -> None:
     password = getpass("Contrasena (minimo 10 caracteres): ")
     if admin:
         service.create_initial_admin(name, email, password)
-        print("Administrador creado. Esta cuenta se conserva durante esta ejecucion.")
+        print("Administrador creado. Esta cuenta se conserva entre ejecuciones.")
     else:
         service.register_client(name, email, password)
         print("Cuenta de cliente creada.")
-
-
-def _login(service: TravelService) -> User | None:
-    try:
-        return service.authenticate(input("Correo: "), getpass("Contrasena: "))
-    except ValueError as error:
-        print(f"Error: {error}")
-        return None
 
 
 def _user_menu(service: TravelService, user: User) -> None:
@@ -64,10 +71,10 @@ def _user_menu(service: TravelService, user: User) -> None:
             )
             option = input("Opcion: ").strip()
             actions = {
-                "1": lambda: _show_destinations(service),
-                "2": lambda: _create_destination(service, user),
-                "3": lambda: _update_destination(service, user),
-                "4": lambda: _delete_destination(service, user),
+                "1": lambda: show_destinations(service),
+                "2": lambda: create_destination(service, user),
+                "3": lambda: update_destination(service, user),
+                "4": lambda: delete_destination(service, user),
                 "5": lambda: _create_package(service, user),
                 "6": lambda: _show_packages(service),
             }
@@ -78,7 +85,7 @@ def _user_menu(service: TravelService, user: User) -> None:
             )
             option = input("Opcion: ").strip()
             actions = {
-                "1": lambda: _show_destinations(service),
+                "1": lambda: show_destinations(service),
                 "2": lambda: _show_packages(service),
                 "3": lambda: _reserve_package(service, user),
                 "4": lambda: _show_history(service, user),
@@ -92,58 +99,8 @@ def _user_menu(service: TravelService, user: User) -> None:
             _run_action(action)
 
 
-def _show_destinations(service: TravelService) -> None:
-    destinations = service.list_destinations()
-    if not destinations:
-        print("Todavia no hay destinos registrados.")
-        return
-    for destination in destinations:
-        _print_destination(destination)
-
-
-def _print_destination(destination: Destination) -> None:
-    print(
-        f"{destination.id} | {destination.name} - {destination.city}, {destination.country}"
-        f" | {destination.description} | ${destination.base_cost:.2f}"
-    )
-
-
-def _create_destination(service: TravelService, actor: User) -> None:
-    destination = service.create_destination(
-        actor,
-        input("Nombre: "),
-        input("Pais: "),
-        input("Ciudad: "),
-        input("Descripcion: "),
-        _read_money("Costo base: "),
-    )
-    print(f"Destino creado: {destination.id}")
-
-
-def _update_destination(service: TravelService, actor: User) -> None:
-    _show_destinations(service)
-    destination_id = input("ID del destino a modificar: ").strip()
-    destination = service.update_destination(
-        actor,
-        destination_id,
-        input("Nuevo nombre: "),
-        input("Nuevo pais: "),
-        input("Nueva ciudad: "),
-        input("Nueva descripcion: "),
-        _read_money("Nuevo costo base: "),
-    )
-    print(f"Destino actualizado: {destination.name}")
-
-
-def _delete_destination(service: TravelService, actor: User) -> None:
-    _show_destinations(service)
-    destination_id = input("ID del destino a eliminar: ").strip()
-    service.delete_destination(actor, destination_id)
-    print("Destino eliminado.")
-
-
 def _create_package(service: TravelService, actor: User) -> None:
-    _show_destinations(service)
+    show_destinations(service)
     destination_ids = [
         item.strip()
         for item in input("IDs de destinos separados por coma: ").split(",")
@@ -195,14 +152,6 @@ def _show_history(service: TravelService, user: User) -> None:
             f"{reservation.created_at:%Y-%m-%d %H:%M UTC} | {package.name}"
             f" | {package.start_date} al {package.end_date} | ${package.cost:.2f}"
         )
-
-
-def _read_money(prompt: str) -> Decimal:
-    raw_value = input(prompt).strip().replace(",", ".")
-    try:
-        return Decimal(raw_value)
-    except InvalidOperation:
-        raise ValueError("Ingresa un monto numerico valido.") from None
 
 
 def _read_date(prompt: str) -> date:
